@@ -1,0 +1,26 @@
+name = "TracyMCP"
+uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+authors = ["Sebastian Micluța-Câmpeanu <sebastian.mc95@proton.me>", "Claude <noreply@anthropic.com>"]
+version = "0.1.0"
+
+[deps]
+CodecLz4 = "5ba52731-8f18-5e0d-9241-30f10d1ec561"
+CodecZstd = "6b39b394-51ab-5f42-8807-6242bab2b4c2"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+ModelContextProtocol = "c58f755f-f2a7-4f48-bf29-4e9659b78499"
+TranscodingStreams = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
+
+[apps]
+tracy-mcp = {}
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
+
+[compat]
+julia = "1.12"
+CodecLz4 = "0.4"
+CodecZstd = "0.8"
+JSON3 = "1"
