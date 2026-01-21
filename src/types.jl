@@ -35,7 +35,12 @@ mutable struct ZoneEvent
     ZoneEvent() = new(0, 0, 0, "", ZoneEvent[])
     ZoneEvent(start::Int64, stop::Int64, srcloc::Int16) =
         new(start, stop, srcloc, "", ZoneEvent[])
+    ZoneEvent(start::Int64, stop::Int64, srcloc::Int16, text::String, children::Vector{ZoneEvent}) =
+        new(start, stop, srcloc, text, children)
 end
+
+"""Get the duration of a zone in nanoseconds."""
+get_zone_duration(zone::ZoneEvent) = zone.end_time - zone.start_time
 
 """
     ThreadData

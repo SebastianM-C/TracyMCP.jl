@@ -122,8 +122,12 @@ using JSON3
 
 end
 
-# Opcode validation tests - verify TracyReader opcodes match Tracy's QueueType enum
-# Reference: tracy/public/common/TracyQueue.hpp
+# NOTE: Opcode validation tests removed - TracyReader now uses structured file sections
+# instead of opcodes. The opcodes below are for the NETWORK protocol, not the file format.
+# The file format uses structured binary sections with direct struct reads.
+#
+# Original tests commented out:
+#=
 @testset "Opcode Values (vs Tracy QueueType)" begin
     # These are the CORRECT values from Tracy's QueueType enum (0-indexed)
     # See: https://github.com/wolfpld/tracy/blob/master/public/common/TracyQueue.hpp
@@ -306,6 +310,7 @@ end
         @info "Correct Tracy QueueType values:" ZoneBegin=TRACY_QUEUE_TYPE.ZoneBegin ZoneEnd=TRACY_QUEUE_TYPE.ZoneEnd StringData=TRACY_QUEUE_TYPE.StringData Terminate=TRACY_QUEUE_TYPE.Terminate
     end
 end
+=#
 
 # Integration tests (require actual .tracy files)
 @testset "Integration Tests" begin
