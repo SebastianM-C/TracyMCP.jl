@@ -3,58 +3,182 @@
 include("types.jl")
 include("decompression.jl")
 
-# Tracy packet opcodes (subset needed for zone analysis)
-# These are based on Tracy's ServerQuery enum
+# Tracy packet opcodes - must match QueueType enum in tracy/public/common/TracyQueue.hpp
+# Reference: https://github.com/wolfpld/tracy/blob/master/public/common/TracyQueue.hpp
 module Opcodes
-    # Server query responses (string table entries)
-    const StringData          = 0x01
-    const ThreadName          = 0x02
-    const SourceLocation      = 0x03
-    const PlotName            = 0x04
-    const FrameName           = 0x05
+    # Zone text/name (0-1)
+    const ZoneText                          = 0
+    const ZoneName                          = 1
 
-    # Zone events
-    const ZoneBegin           = 0x10
-    const ZoneBeginCallstack  = 0x11
-    const ZoneEnd             = 0x12
-    const ZoneValidation      = 0x13
-    const ZoneColor           = 0x14
-    const ZoneName            = 0x15
-    const ZoneText            = 0x16
-    const ZoneValue           = 0x17
+    # Messages (2-6)
+    const Message                           = 2
+    const MessageColor                      = 3
+    const MessageCallstack                  = 4
+    const MessageColorCallstack             = 5
+    const MessageAppInfo                    = 6
 
-    # Frame markers
-    const FrameMarkMsg        = 0x20
-    const FrameMarkMsgStart   = 0x21
-    const FrameMarkMsgEnd     = 0x22
+    # Zone begin variants (7-8, 15-16)
+    const ZoneBeginAllocSrcLoc              = 7
+    const ZoneBeginAllocSrcLocCallstack     = 8
+    const ZoneBegin                         = 15
+    const ZoneBeginCallstack                = 16
+    const ZoneEnd                           = 17
 
-    # Memory events
-    const MemAlloc            = 0x30
-    const MemFree             = 0x31
-    const MemAllocCallstack   = 0x32
-    const MemFreeCallstack    = 0x33
+    # Callstack (9-14)
+    const CallstackSerial                   = 9
+    const Callstack                         = 10
+    const CallstackAlloc                    = 11
+    const CallstackSample                   = 12
+    const CallstackSampleContextSwitch      = 13
+    const FrameImage                        = 14
 
-    # Thread events
-    const ThreadWakeup        = 0x40
-    const ThreadContext       = 0x41
+    # Lock events (18-24)
+    const LockWait                          = 18
+    const LockObtain                        = 19
+    const LockRelease                       = 20
+    const LockSharedWait                    = 21
+    const LockSharedObtain                  = 22
+    const LockSharedRelease                 = 23
+    const LockName                          = 24
 
-    # Messages
-    const Message             = 0x50
-    const MessageLiteral      = 0x51
-    const MessageColor        = 0x52
-    const MessageColorLiteral = 0x53
+    # Memory events (25-34)
+    const MemAlloc                          = 25
+    const MemAllocNamed                     = 26
+    const MemFree                           = 27
+    const MemFreeNamed                      = 28
+    const MemAllocCallstack                 = 29
+    const MemAllocCallstackNamed            = 30
+    const MemFreeCallstack                  = 31
+    const MemFreeCallstackNamed             = 32
+    const MemDiscard                        = 33
+    const MemDiscardCallstack               = 34
 
-    # Source location (inline)
-    const SourceLocationPayload = 0x60
+    # GPU events (35-58)
+    const GpuZoneBegin                      = 35
+    const GpuZoneBeginCallstack             = 36
+    const GpuZoneBeginAllocSrcLoc           = 37
+    const GpuZoneBeginAllocSrcLocCallstack  = 38
+    const GpuZoneEnd                        = 39
+    const GpuZoneBeginSerial                = 40
+    const GpuZoneBeginCallstackSerial       = 41
+    const GpuZoneBeginAllocSrcLocSerial     = 42
+    const GpuZoneBeginAllocSrcLocCallstackSerial = 43
+    const GpuZoneEndSerial                  = 44
 
-    # Calibration/metadata
-    const Calibration         = 0x70
-    const Parameter           = 0x71
-    const CpuTopology         = 0x72
-    const HostInfo            = 0x73
+    # Plot data (45-47)
+    const PlotDataInt                       = 45
+    const PlotDataFloat                     = 46
+    const PlotDataDouble                    = 47
 
-    # Termination
-    const Terminate           = 0xFF
+    # Context/thread events (48-49, 62)
+    const ContextSwitch                     = 48
+    const ThreadWakeup                      = 49
+    const ThreadContext                     = 62
+
+    # GPU timing (50-52, 63-64)
+    const GpuTime                           = 50
+    const GpuContextName                    = 51
+    const GpuAnnotationName                 = 52
+    const GpuCalibration                    = 63
+    const GpuTimeSync                       = 64
+
+    # Symbol/callstack info (53-57, 83)
+    const CallstackFrameSize                = 53
+    const SymbolInformation                 = 54
+    const ExternalNameMetadata              = 55
+    const SymbolCodeMetadata                = 56
+    const SourceCodeMetadata                = 57
+    const CallstackFrame                    = 83
+
+    # Fiber events (58-59)
+    const FiberEnter                        = 58
+    const FiberLeave                        = 59
+
+    # Control (60-61, 65-66)
+    const Terminate                         = 60
+    const KeepAlive                         = 61
+    const Crash                             = 65
+    const CrashReport                       = 66
+
+    # Zone validation/color/value (67-69)
+    const ZoneValidation                    = 67
+    const ZoneColor                         = 68
+    const ZoneValue                         = 69
+
+    # Frame markers (70-73)
+    const FrameMarkMsg                      = 70
+    const FrameMarkMsgStart                 = 71
+    const FrameMarkMsgEnd                   = 72
+    const FrameVsync                        = 73
+
+    # Source location (74)
+    const SourceLocation                    = 74
+
+    # Lock announce/terminate (75-77)
+    const LockAnnounce                      = 75
+    const LockTerminate                     = 76
+    const LockMark                          = 77
+
+    # Message literal variants (78-81)
+    const MessageLiteral                    = 78
+    const MessageLiteralColor               = 79
+    const MessageLiteralCallstack           = 80
+    const MessageLiteralColorCallstack      = 81
+
+    # GPU new context (82)
+    const GpuNewContext                     = 82
+
+    # System reports (84-92)
+    const SysTimeReport                     = 84
+    const SysPowerReport                    = 85
+    const TidToPid                          = 86
+    const HwSampleCpuCycle                  = 87
+    const HwSampleInstructionRetired        = 88
+    const HwSampleCacheReference            = 89
+    const HwSampleCacheMiss                 = 90
+    const HwSampleBranchRetired             = 91
+    const HwSampleBranchMiss                = 92
+
+    # Config/setup (93-94)
+    const PlotConfig                        = 93
+    const ParamSetup                        = 94
+
+    # Ack messages (95-97)
+    const AckServerQueryNoop                = 95
+    const AckSourceCodeNotAvailable         = 96
+    const AckSymbolCodeNotAvailable         = 97
+
+    # CPU topology (98)
+    const CpuTopology                       = 98
+
+    # String data variants (99-100, 104-105)
+    const SingleStringData                  = 99
+    const SecondStringData                  = 100
+    const StringData                        = 104
+    const ThreadName                        = 105
+    const PlotName                          = 106
+
+    # Payload types (101-103, 107-109)
+    const MemNamePayload                    = 101
+    const ThreadGroupHint                   = 102
+    const GpuZoneAnnotation                 = 103
+    const SourceLocationPayload             = 107
+    const CallstackPayload                  = 108
+    const CallstackAllocPayload             = 109
+
+    # Frame/external/symbol data (110-116)
+    const FrameName                         = 110
+    const FrameImageData                    = 111
+    const ExternalName                      = 112
+    const ExternalThreadName                = 113
+    const SymbolCode                        = 114
+    const SourceCode                        = 115
+    const FiberName                         = 116
+
+    # Legacy aliases for compatibility (maps old names to correct values)
+    const Calibration                       = PlotConfig  # Was 0x70, calibration handled differently
+    const Parameter                         = ParamSetup
+    const HostInfo                          = 0xFF  # Not in QueueType - handled separately in file header
 end
 
 """
@@ -213,8 +337,8 @@ function parse_packet!(stream::TracyInputStream, trace::TracyTrace, state::Parse
     elseif opcode == Opcodes.Message || opcode == Opcodes.MessageLiteral
         parse_message!(stream, trace, state, opcode == Opcodes.MessageLiteral)
 
-    elseif opcode == Opcodes.MessageColor || opcode == Opcodes.MessageColorLiteral
-        parse_message_color!(stream, trace, state, opcode == Opcodes.MessageColorLiteral)
+    elseif opcode == Opcodes.MessageColor || opcode == Opcodes.MessageLiteralColor
+        parse_message_color!(stream, trace, state, opcode == Opcodes.MessageLiteralColor)
 
     elseif opcode == Opcodes.FrameMarkMsg
         parse_frame_mark!(stream, trace, state)

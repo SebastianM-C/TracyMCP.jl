@@ -266,38 +266,38 @@ end
 
     @testset "Zone opcodes" begin
         # These should match Tracy's QueueType values
-        @test_broken getopcode(:ZoneBegin) == TRACY_QUEUE_TYPE.ZoneBegin
-        @test_broken getopcode(:ZoneBeginCallstack) == TRACY_QUEUE_TYPE.ZoneBeginCallstack
-        @test_broken getopcode(:ZoneEnd) == TRACY_QUEUE_TYPE.ZoneEnd
-        @test_broken getopcode(:ZoneName) == TRACY_QUEUE_TYPE.ZoneName
-        @test_broken getopcode(:ZoneText) == TRACY_QUEUE_TYPE.ZoneText
-        @test_broken getopcode(:ZoneColor) == TRACY_QUEUE_TYPE.ZoneColor
+        @test getopcode(:ZoneBegin) == TRACY_QUEUE_TYPE.ZoneBegin
+        @test getopcode(:ZoneBeginCallstack) == TRACY_QUEUE_TYPE.ZoneBeginCallstack
+        @test getopcode(:ZoneEnd) == TRACY_QUEUE_TYPE.ZoneEnd
+        @test getopcode(:ZoneName) == TRACY_QUEUE_TYPE.ZoneName
+        @test getopcode(:ZoneText) == TRACY_QUEUE_TYPE.ZoneText
+        @test getopcode(:ZoneColor) == TRACY_QUEUE_TYPE.ZoneColor
     end
 
     @testset "String/metadata opcodes" begin
-        @test_broken getopcode(:StringData) == TRACY_QUEUE_TYPE.StringData
-        @test_broken getopcode(:ThreadName) == TRACY_QUEUE_TYPE.ThreadName
-        @test_broken getopcode(:SourceLocation) == TRACY_QUEUE_TYPE.SourceLocation
-        @test_broken getopcode(:SourceLocationPayload) == TRACY_QUEUE_TYPE.SourceLocationPayload
+        @test getopcode(:StringData) == TRACY_QUEUE_TYPE.StringData
+        @test getopcode(:ThreadName) == TRACY_QUEUE_TYPE.ThreadName
+        @test getopcode(:SourceLocation) == TRACY_QUEUE_TYPE.SourceLocation
+        @test getopcode(:SourceLocationPayload) == TRACY_QUEUE_TYPE.SourceLocationPayload
     end
 
     @testset "Memory opcodes" begin
-        @test_broken getopcode(:MemAlloc) == TRACY_QUEUE_TYPE.MemAlloc
-        @test_broken getopcode(:MemFree) == TRACY_QUEUE_TYPE.MemFree
-        @test_broken getopcode(:MemAllocCallstack) == TRACY_QUEUE_TYPE.MemAllocCallstack
-        @test_broken getopcode(:MemFreeCallstack) == TRACY_QUEUE_TYPE.MemFreeCallstack
+        @test getopcode(:MemAlloc) == TRACY_QUEUE_TYPE.MemAlloc
+        @test getopcode(:MemFree) == TRACY_QUEUE_TYPE.MemFree
+        @test getopcode(:MemAllocCallstack) == TRACY_QUEUE_TYPE.MemAllocCallstack
+        @test getopcode(:MemFreeCallstack) == TRACY_QUEUE_TYPE.MemFreeCallstack
     end
 
     @testset "Message opcodes" begin
-        @test_broken getopcode(:Message) == TRACY_QUEUE_TYPE.Message
-        @test_broken getopcode(:MessageLiteral) == TRACY_QUEUE_TYPE.MessageLiteral
-        @test_broken getopcode(:MessageColor) == TRACY_QUEUE_TYPE.MessageColor
+        @test getopcode(:Message) == TRACY_QUEUE_TYPE.Message
+        @test getopcode(:MessageLiteral) == TRACY_QUEUE_TYPE.MessageLiteral
+        @test getopcode(:MessageColor) == TRACY_QUEUE_TYPE.MessageColor
     end
 
     @testset "Control opcodes" begin
-        @test_broken getopcode(:Terminate) == TRACY_QUEUE_TYPE.Terminate
-        @test_broken getopcode(:ThreadContext) == TRACY_QUEUE_TYPE.ThreadContext
-        @test_broken getopcode(:FrameMarkMsg) == TRACY_QUEUE_TYPE.FrameMarkMsg
+        @test getopcode(:Terminate) == TRACY_QUEUE_TYPE.Terminate
+        @test getopcode(:ThreadContext) == TRACY_QUEUE_TYPE.ThreadContext
+        @test getopcode(:FrameMarkMsg) == TRACY_QUEUE_TYPE.FrameMarkMsg
     end
 
     # Document current (wrong) values for reference
