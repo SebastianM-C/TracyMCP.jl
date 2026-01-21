@@ -11,7 +11,7 @@ TracyMCP/
 │   ├── TracyMCP.jl       # Main module, MCP server, @main entry point
 │   ├── TracyReader.jl    # Binary file parser (includes types.jl, decompression.jl)
 │   ├── types.jl          # Data structures (TracyTrace, ZoneEvent, etc.)
-│   ├── decompression.jl  # LZ4/ZSTD block decompression, LEB128 encoding
+│   ├── decompression.jl  # Multi-stream ZSTD decompression
 │   └── tools/
 │       └── trace_tools.jl # MCP tool implementations
 └── test/
@@ -27,10 +27,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 # Load module interactively
 julia --project=. -e 'using TracyMCP'
 
-# Quick trace analysis (without MCP)
-julia --project=. -e 'using TracyMCP; TracyMCP.load_and_analyze("file.tracy")'
-
-# Install as app (after committing changes)
+# Install as app (after changes)
 julia -e 'using Pkg; Pkg.Apps.add(path=".")'
 
 # Run installed app
@@ -40,21 +37,54 @@ tracy-mcp analyze file.tracy
 
 ## Key Technical Details
 
-### Tracy Binary Format
+### Tracy File Format (IMPORTANT)
 
-Tracy files use a packet-based format with:
-- **Block compression**: LZ4 or ZSTD in 64KB blocks (4-byte size prefix + compressed data)
-- **Delta encoding**: Timestamps stored as differences from previous values
-- **LEB128 encoding**: Variable-length integers for compact storage
-- **String table**: Pointers reference strings stored separately
+**Tracy files use structured binary SECTIONS, NOT opcodes.** The opcode-based format is for Tracy's network protocol, not the file format.
 
-### Important Opcodes (in `TracyReader.jl`)
+File structure:
+1. **Header**: Magic (`tracy0...`), version, multiplier, capture time, etc.
+2. **Compressed data blocks**: Multi-stream ZSTD with interleaved blocks
+3. **Sections** (in order):
+   - Frame data
+   - Strings (unique strings, ID mappings, thread names, external names)
+   - Thread compression tables (local + external)
+   - Source locations (static + expand array + payloads)
+   - Source location zone statistics
+   - Locks
+   - Messages
+   - Zone extras
+   - Thread timelines (zones per thread)
+   - Plots
 
-- `0x10` ZoneBegin, `0x12` ZoneEnd - CPU profiling zones
-- `0x03` SourceLocation - file/line/function info
-- `0x02` ThreadName - thread identification
-- `0x30`/`0x31` MemAlloc/MemFree - memory tracking
-- `0x50` Message - log messages
+### Multi-Stream ZSTD Compression
+
+Tracy uses interleaved multi-stream compression:
+- Blocks are distributed round-robin across N streams
+- Each block: 4-byte size prefix + compressed data
+- Must concatenate all blocks per stream, then decompress each stream
+- Final data is interleaved byte-by-byte from all streams
+
+### Source Location Two-Level Indirection
+
+Zones store an `int16 srcloc_id`. Lookup requires two steps:
+1. `srcloc_expand[id]` → `uint64 ptr`
+2. `srcloc_by_ptr[ptr]` → `SourceLocation`
+
+The expand array in the file **already includes** the reserved index 0.
+
+### Packed Structs (no padding)
+
+Tracy uses `#pragma pack(push, 1)`:
+- **StringRef**: 9 bytes (uint64 str + uint8 flags)
+- **SourceLocationBase**: 35 bytes (3×StringRef + 2×uint32)
+- **ZoneExtra**: 12 bytes (4×Int24 for callstack, text, name, color)
+
+### Zone Timeline Format
+
+Zones use an interleaved format:
+- First zone: srcloc + tstart + extra_idx + child_sz
+- Subsequent: tend_prev + srcloc + tstart + extra_idx + child_sz
+- Last zone's tend is read separately
 
 ### MCP Tools Available
 
@@ -70,27 +100,36 @@ Tracy files use a packet-based format with:
 | `get_thread_timeline` | Timeline of zone activity |
 | `get_messages` | Log messages from trace |
 
+## Verification
+
+Use `tracy-csvexport` from TracyProfiler_jll to verify parser output:
+
+```julia
+using TracyProfiler_jll
+run(`$(TracyProfiler_jll.tracy_csvexport()) /path/to/trace.tracy`)
+```
+
+Compare zone names, call counts, and total times against MCP `find_hotspots` output.
+
 ## Dependencies
 
 - `ModelContextProtocol.jl` - MCP server framework
-- `CodecLz4.jl` / `CodecZstd.jl` - Decompression
+- `CodecZstd.jl` - ZSTD decompression
 - `JSON3.jl` - JSON serialization
 - `TranscodingStreams.jl` - Stream processing
 
+## Reference
+
+Tracy source code is available at `/home/sebastian/ai_sandbox/tracy`. Key files:
+- `server/TracyWorker.cpp` - File loading logic
+- `server/TracyVector.hpp` - `reserve_exact()` allocates and sets size
+- `public/common/TracyQueue.hpp` - Network protocol opcodes (NOT file format)
+
 ## Known Limitations
 
-1. **File format complexity**: Tracy's binary format evolves with each version. The parser implements common opcodes but may need updates for newer Tracy versions.
-
-2. **No GPU zones**: GPU profiling data is not yet parsed (Phase 2).
-
-3. **Approximate self-time**: Self-time calculation is approximate; proper calculation requires building the full call tree.
-
-## Testing with Real Files
-
-To test with actual Tracy captures:
-1. Profile a Julia program using TracyProfiler.jl
-2. Save the capture as a .tracy file
-3. Use `tracy-mcp analyze file.tracy` or load via MCP tools
+1. **Memory events**: Not yet fully parsed
+2. **GPU zones**: Not yet supported
+3. **Callstack resolution**: Callstack frames not resolved to symbols
 
 ## Architecture Notes
 
