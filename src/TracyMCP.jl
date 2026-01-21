@@ -58,7 +58,7 @@ export run_server, read_tracy_file, TracyTrace
 function make_handler(f::Function)
     return function(args::Dict)
         result = f(args)
-        return [TextContent(result)]
+        return [TextContent(text=result)]
     end
 end
 
@@ -87,7 +87,7 @@ function create_tools()
         ),
         handler = args -> begin
             file = get(args, "file", "")
-            [TextContent(tool_load_trace(file))]
+            [TextContent(text=tool_load_trace(file))]
         end,
         return_type = Vector{TextContent}
     ))
@@ -101,7 +101,7 @@ function create_tools()
             "type" => "object",
             "properties" => Dict()
         ),
-        handler = args -> [TextContent(tool_get_trace_summary())],
+        handler = args -> [TextContent(text=tool_get_trace_summary())],
         return_type = Vector{TextContent}
     ))
 
@@ -127,7 +127,7 @@ function create_tools()
         handler = args -> begin
             limit = get(args, "limit", 20)
             by = get(args, "by", "total_time")
-            [TextContent(tool_find_hotspots(; limit=limit, by=by))]
+            [TextContent(text=tool_find_hotspots(; limit=limit, by=by))]
         end,
         return_type = Vector{TextContent}
     ))
@@ -149,7 +149,7 @@ function create_tools()
         ),
         handler = args -> begin
             function_name = get(args, "function_name", "")
-            [TextContent(tool_analyze_function(function_name))]
+            [TextContent(text=tool_analyze_function(function_name))]
         end,
         return_type = Vector{TextContent}
     ))
@@ -176,7 +176,7 @@ function create_tools()
             thread_id = get(args, "thread_id", nothing)
             depth = get(args, "depth", 3)
             tid = thread_id === nothing ? nothing : UInt64(thread_id)
-            [TextContent(tool_get_zone_tree(; thread_id=tid, depth=depth))]
+            [TextContent(text=tool_get_zone_tree(; thread_id=tid, depth=depth))]
         end,
         return_type = Vector{TextContent}
     ))
@@ -203,7 +203,7 @@ function create_tools()
         handler = args -> begin
             pattern = get(args, "pattern", "")
             limit = get(args, "limit", 50)
-            [TextContent(tool_search_zones(pattern; limit=limit))]
+            [TextContent(text=tool_search_zones(pattern; limit=limit))]
         end,
         return_type = Vector{TextContent}
     ))
@@ -217,7 +217,7 @@ function create_tools()
             "type" => "object",
             "properties" => Dict()
         ),
-        handler = args -> [TextContent(tool_get_memory_summary())],
+        handler = args -> [TextContent(text=tool_get_memory_summary())],
         return_type = Vector{TextContent}
     ))
 
@@ -253,7 +253,7 @@ function create_tools()
             time_end = get(args, "time_end", nothing)
             limit = get(args, "limit", 100)
             tid = thread_id === nothing ? nothing : UInt64(thread_id)
-            [TextContent(tool_get_thread_timeline(;
+            [TextContent(text=tool_get_thread_timeline(;
                 thread_id=tid,
                 time_start=time_start,
                 time_end=time_end,
@@ -279,7 +279,7 @@ function create_tools()
         ),
         handler = args -> begin
             limit = get(args, "limit", 100)
-            [TextContent(tool_get_messages(; limit=limit))]
+            [TextContent(text=tool_get_messages(; limit=limit))]
         end,
         return_type = Vector{TextContent}
     ))
