@@ -322,6 +322,7 @@ end
     tool_search_zones(pattern::String; limit::Int=50) -> String
 
 Search for zones matching a name pattern.
+Recursively searches all zones including children.
 """
 function tool_search_zones(pattern::String; limit::Int=50)
     trace = CURRENT_TRACE[]
@@ -335,27 +336,43 @@ function tool_search_zones(pattern::String; limit::Int=50)
     regex = Regex(pattern, "i")
     matches = []
 
+    function search_zone(zone::ZoneEvent, thread_id::UInt64, thread_name::String)
+        if length(matches) >= limit
+            return
+        end
+
+        loc = get(trace.source_locations, zone.srcloc_id, nothing)
+        if loc !== nothing
+            # Match against zone name, function name, OR zone text
+            if occursin(regex, loc.name) || occursin(regex, loc.function_name) || occursin(regex, zone.text)
+                push!(matches, Dict(
+                    "name" => loc.name,
+                    "function" => loc.function_name,
+                    "file" => loc.file,
+                    "line" => loc.line,
+                    "thread_id" => thread_id,
+                    "thread_name" => thread_name,
+                    "start_time" => zone.start_time,
+                    "duration" => format_time(get_zone_duration(zone)),
+                    "text" => zone.text
+                ))
+            end
+        end
+
+        # Recursively search children
+        for child in zone.children
+            search_zone(child, thread_id, thread_name)
+            if length(matches) >= limit
+                return
+            end
+        end
+    end
+
     for (thread_id, thread) in trace.threads
         for zone in thread.zones
-            loc = get(trace.source_locations, zone.srcloc_id, nothing)
-            if loc !== nothing
-                if occursin(regex, loc.name) || occursin(regex, loc.function_name)
-                    push!(matches, Dict(
-                        "name" => loc.name,
-                        "function" => loc.function_name,
-                        "file" => loc.file,
-                        "line" => loc.line,
-                        "thread_id" => thread_id,
-                        "thread_name" => thread.name,
-                        "start_time" => zone.start_time,
-                        "duration" => format_time(get_zone_duration(zone)),
-                        "text" => zone.text
-                    ))
-
-                    if length(matches) >= limit
-                        break
-                    end
-                end
+            search_zone(zone, thread_id, thread.name)
+            if length(matches) >= limit
+                break
             end
         end
         if length(matches) >= limit

@@ -63,6 +63,10 @@ mutable struct ParserState
     srcloc_expand::Vector{UInt64}                 # int16 index -> ptr mapping
     srcloc_payload::Vector{SourceLocation}        # payload source locations (negative IDs)
 
+    # String data vector for StringIdx lookups (indexed by position, not pointer)
+    # Tracy's StringIdx stores (index + 1), so stored value 1 maps to string_data_vec[1]
+    string_data_vec::Vector{String}
+
     function ParserState()
         new(0, 0, 0, 0, (0,0,0), UInt8[], 1,
             Dict{UInt64, String}(),
@@ -70,7 +74,8 @@ mutable struct ParserState
             Dict{UInt64, String}(),
             Dict{UInt64, SourceLocation}(),
             UInt64[],  # File's expand array already includes reserved index 0
-            SourceLocation[])
+            SourceLocation[],
+            String[])  # string_data_vec starts empty, populated in read_strings!
     end
 end
 
@@ -321,13 +326,18 @@ end
 # ============== String Data ==============
 
 function read_strings!(state::ParserState, trace::TracyTrace)
-    # Unique strings
+    # Unique strings - these are stored in order and indexed by StringIdx
+    # Tracy's StringIdx stores (index + 1), so the first string (index 0) is accessed with stored value 1
+    # We use Julia's 1-based indexing, so string_data_vec[1] = first string, which matches stored value 1
     num_strings = read_value(state, UInt64)
-    for _ in 1:num_strings
+    resize!(state.string_data_vec, num_strings)
+    for i in 1:num_strings
         ptr = read_value(state, UInt64)
         str = read_string!(state)
         state.string_data[ptr] = str
         trace.string_table[ptr] = str
+        # Store by index for StringIdx lookups (Julia 1-based matches Tracy's stored value)
+        state.string_data_vec[i] = str
     end
 
     # String ID mappings
@@ -655,12 +665,35 @@ function read_zone_timeline!(state::ParserState, trace::TracyTrace,
     return state.ref_time
 end
 
-"""Get zone text from extras."""
+"""Get zone text from extras, combining both name and text fields.
+
+Tracy's StringIdx stores (actual_index + 1), so stored value 0 means "no string"
+and stored values 1+ map to actual indices 0+. Since Julia uses 1-based indexing,
+string_data_vec[idx] directly gives the correct string when idx > 0.
+
+ZoneExtra has two string fields:
+- name_idx: overrides the zone name (e.g., method signature)
+- text_idx: additional annotation text (e.g., file:line info)
+
+We combine both into the text field, separated by newline if both exist.
+"""
 function get_zone_text(extras::Vector{ZoneExtraData}, extra_idx::UInt32, state::ParserState)
     if extra_idx > 0 && extra_idx <= length(extras)
-        text_idx = extras[extra_idx].text_idx
-        if text_idx > 0
-            return resolve_string(state, UInt64(text_idx - 1))
+        extra = extras[extra_idx]
+        parts = String[]
+
+        # Get name override (often contains method signature)
+        if extra.name_idx > 0 && extra.name_idx <= length(state.string_data_vec)
+            push!(parts, state.string_data_vec[extra.name_idx])
+        end
+
+        # Get text annotation (often contains file:line info)
+        if extra.text_idx > 0 && extra.text_idx <= length(state.string_data_vec)
+            push!(parts, state.string_data_vec[extra.text_idx])
+        end
+
+        if !isempty(parts)
+            return join(parts, "\n")
         end
     end
     return ""
