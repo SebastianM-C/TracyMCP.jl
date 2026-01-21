@@ -69,7 +69,7 @@ mutable struct ParserState
             Dict{UInt64, UInt64}(),
             Dict{UInt64, String}(),
             Dict{UInt64, SourceLocation}(),
-            UInt64[0],  # Index 0 is reserved/invalid (Tracy does this)
+            UInt64[],  # File's expand array already includes reserved index 0
             SourceLocation[])
     end
 end
