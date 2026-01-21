@@ -58,11 +58,19 @@ mutable struct ParserState
     string_map::Dict{UInt64, UInt64}       # id -> ptr
     thread_names::Dict{UInt64, String}     # thread_id -> name
 
+    # Source location lookup (two-level indirection like Tracy)
+    srcloc_by_ptr::Dict{UInt64, SourceLocation}  # ptr -> SourceLocation (static)
+    srcloc_expand::Vector{UInt64}                 # int16 index -> ptr mapping
+    srcloc_payload::Vector{SourceLocation}        # payload source locations (negative IDs)
+
     function ParserState()
         new(0, 0, 0, 0, (0,0,0), UInt8[], 1,
             Dict{UInt64, String}(),
             Dict{UInt64, UInt64}(),
-            Dict{UInt64, String}())
+            Dict{UInt64, String}(),
+            Dict{UInt64, SourceLocation}(),
+            UInt64[0],  # Index 0 is reserved/invalid (Tracy does this)
+            SourceLocation[])
     end
 end
 
@@ -414,7 +422,7 @@ function read_source_location_base!(state::ParserState)
 end
 
 function read_source_locations!(state::ParserState, trace::TracyTrace)
-    # Static source locations
+    # Static source locations: stored by ptr key
     num_static = read_value(state, UInt64)
     for _ in 1:num_static
         ptr = read_value(state, UInt64)
@@ -429,19 +437,21 @@ function read_source_locations!(state::ParserState, trace::TracyTrace)
             color
         )
 
-        # Use ptr as ID (will be mapped to int16 later)
-        trace.source_locations[Int16(length(trace.source_locations) + 1)] = srcloc
+        # Store by ptr key (like Tracy's m_data.sourceLocation)
+        state.srcloc_by_ptr[ptr] = srcloc
     end
 
-    # Source location expand (pointers)
+    # Source location expand: maps int16 index -> uint64 ptr
+    # This is the crucial mapping that zones use!
     num_expand = read_value(state, UInt64)
     for _ in 1:num_expand
-        _ = read_value(state, UInt64)
+        ptr = read_value(state, UInt64)
+        push!(state.srcloc_expand, ptr)
     end
 
-    # Dynamic source location payloads
+    # Dynamic source location payloads (for negative IDs)
     num_payloads = read_value(state, UInt64)
-    for i in 1:num_payloads
+    for _ in 1:num_payloads
         name_ref, func_ref, file_ref, line, color = read_source_location_base!(state)
 
         srcloc = SourceLocation(
@@ -452,11 +462,56 @@ function read_source_locations!(state::ParserState, trace::TracyTrace)
             color
         )
 
-        # Negative IDs for payloads
+        push!(state.srcloc_payload, srcloc)
+    end
+
+    # Now populate trace.source_locations using the expand mapping
+    # For positive IDs: expand[id] -> ptr -> srcloc_by_ptr[ptr]
+    for (idx, ptr) in enumerate(state.srcloc_expand)
+        if idx == 1
+            continue  # Index 0 is reserved/invalid
+        end
+        if haskey(state.srcloc_by_ptr, ptr)
+            # idx is 1-based in Julia, but Tracy uses it directly as int16
+            # Since we start with [0] in expand, idx-1 gives the Tracy index
+            trace.source_locations[Int16(idx - 1)] = state.srcloc_by_ptr[ptr]
+        end
+    end
+
+    # For negative IDs: payload array (1-indexed in Julia, so -1 -> payload[1])
+    for (i, srcloc) in enumerate(state.srcloc_payload)
         trace.source_locations[Int16(-i)] = srcloc
     end
 
-    @info "Loaded source locations" static=num_static payloads=num_payloads
+    @info "Loaded source locations" static=num_static expand=num_expand payloads=num_payloads
+end
+
+"""
+    get_source_location(state::ParserState, id::Int16) -> Union{SourceLocation, Nothing}
+
+Get a source location by its int16 ID (as used by zones).
+- Positive IDs: lookup via expand array -> ptr -> srcloc_by_ptr
+- Negative IDs: direct lookup in payload array
+"""
+function get_source_location(state::ParserState, id::Int16)
+    if id < 0
+        # Negative IDs: payload array (1-indexed, so -1 -> index 1)
+        idx = -Int(id)
+        if idx <= length(state.srcloc_payload)
+            return state.srcloc_payload[idx]
+        end
+    elseif id > 0
+        # Positive IDs: expand[id+1] -> ptr -> srcloc_by_ptr
+        # +1 because expand[1] is the reserved 0 entry
+        expand_idx = Int(id) + 1
+        if expand_idx <= length(state.srcloc_expand)
+            ptr = state.srcloc_expand[expand_idx]
+            if haskey(state.srcloc_by_ptr, ptr)
+                return state.srcloc_by_ptr[ptr]
+            end
+        end
+    end
+    return nothing
 end
 
 # ============== Source Location Statistics ==============
