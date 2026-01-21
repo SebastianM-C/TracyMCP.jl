@@ -43,7 +43,7 @@ module TracyMCP
 
 using ModelContextProtocol
 import ModelContextProtocol: MCPTool, ServerConfig, Server, StdioTransport,
-                             TextContent, register!, start!
+                             TextContent, ToolCapability, register!, start!
 using JSON3
 
 # Include sub-modules
@@ -369,7 +369,8 @@ function run_server()
     config = ServerConfig(
         name = "tracy-mcp",
         version = "0.1.0",
-        description = "MCP server for analyzing Tracy profiler captures"
+        description = "MCP server for analyzing Tracy profiler captures",
+        capabilities = [ToolCapability()]
     )
 
     # Create server
