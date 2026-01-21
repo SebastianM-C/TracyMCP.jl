@@ -81,14 +81,14 @@ function read_tracy_file(path::String)
     state = ParserState()
 
     open(path, "r") do io
-        # Detect compression and version
-        compression, version = detect_compression(io)
+        # Detect compression, version, and stream count
+        compression, version, stream_count = detect_compression(io)
         trace.version = version
 
-        @info "Parsing Tracy file" version compression
+        @info "Parsing Tracy file" version compression stream_count
 
-        # Create decompressing stream
-        stream = TracyInputStream(io, compression)
+        # Create decompressing stream with multi-stream support
+        stream = TracyInputStream(io, compression; stream_count=stream_count)
 
         # Read header/metadata first
         read_header!(stream, trace)
